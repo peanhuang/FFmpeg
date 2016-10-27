@@ -63,15 +63,16 @@ typedef struct TransContext {
 static int query_formats(AVFilterContext *ctx)
 {
     AVFilterFormats *pix_fmts = NULL;
-    int fmt;
+    int fmt, ret;
 
     for (fmt = 0; av_pix_fmt_desc_get(fmt); fmt++) {
         const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(fmt);
         if (!(desc->flags & AV_PIX_FMT_FLAG_PAL ||
               desc->flags & AV_PIX_FMT_FLAG_HWACCEL ||
               desc->flags & AV_PIX_FMT_FLAG_BITSTREAM ||
-              desc->log2_chroma_w != desc->log2_chroma_h))
-            ff_add_format(&pix_fmts, fmt);
+              desc->log2_chroma_w != desc->log2_chroma_h) &&
+            (ret = ff_add_format(&pix_fmts, fmt)) < 0)
+            return ret;
     }
 
 
@@ -151,9 +152,9 @@ static int filter_slice(AVFilterContext *ctx, void *arg, int jobnr,
         int hsub    = plane == 1 || plane == 2 ? s->hsub : 0;
         int vsub    = plane == 1 || plane == 2 ? s->vsub : 0;
         int pixstep = s->pixsteps[plane];
-        int inh     = FF_CEIL_RSHIFT(in->height, vsub);
-        int outw    = FF_CEIL_RSHIFT(out->width,  hsub);
-        int outh    = FF_CEIL_RSHIFT(out->height, vsub);
+        int inh     = AV_CEIL_RSHIFT(in->height, vsub);
+        int outw    = AV_CEIL_RSHIFT(out->width,  hsub);
+        int outh    = AV_CEIL_RSHIFT(out->height, vsub);
         int start   = (outh *  jobnr   ) / nb_jobs;
         int end     = (outh * (jobnr+1)) / nb_jobs;
         uint8_t *dst, *src;
@@ -249,7 +250,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     }
 
     td.in = in, td.out = out;
-    ctx->internal->execute(ctx, filter_slice, &td, NULL, FFMIN(outlink->h, ctx->graph->nb_threads));
+    ctx->internal->execute(ctx, filter_slice, &td, NULL, FFMIN(outlink->h, ff_filter_get_nb_threads(ctx)));
     av_frame_free(&in);
     return ff_filter_frame(outlink, out);
 }

@@ -460,7 +460,7 @@ static int ffserver_set_int_param(int *dest, const char *value, int factor,
     if (tmp < min || tmp > max)
         goto error;
     if (factor) {
-        if (FFABS(tmp) > INT_MAX / FFABS(factor))
+        if (tmp == INT_MIN || FFABS(tmp) > INT_MAX / FFABS(factor))
             goto error;
         tmp *= factor;
     }
@@ -685,8 +685,8 @@ static int ffserver_parse_config_global(FFServerConfig *config, const char *cmd,
     return 0;
 }
 
-static int ffserver_parse_config_feed(FFServerConfig *config, const char *cmd, const char **p,
-                                      FFServerStream **pfeed)
+static int ffserver_parse_config_feed(FFServerConfig *config, const char *cmd,
+                                      const char **p, FFServerStream **pfeed)
 {
     FFServerStream *feed;
     char arg[1024];
@@ -793,7 +793,8 @@ static int ffserver_parse_config_feed(FFServerConfig *config, const char *cmd, c
     return 0;
 }
 
-static int ffserver_parse_config_stream(FFServerConfig *config, const char *cmd, const char **p,
+static int ffserver_parse_config_stream(FFServerConfig *config, const char *cmd,
+                                        const char **p,
                                         FFServerStream **pstream)
 {
     char arg[1024], arg2[1024];
@@ -1137,6 +1138,8 @@ static int ffserver_parse_config_stream(FFServerConfig *config, const char *cmd,
         av_dict_free(&config->audio_opts);
         avcodec_free_context(&config->dummy_vctx);
         avcodec_free_context(&config->dummy_actx);
+        config->no_video = 0;
+        config->no_audio = 0;
         *pstream = NULL;
     } else if (!av_strcasecmp(cmd, "File") ||
                !av_strcasecmp(cmd, "ReadOnlyFile")) {

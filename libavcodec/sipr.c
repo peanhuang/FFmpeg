@@ -28,11 +28,11 @@
 #include "libavutil/channel_layout.h"
 #include "libavutil/float_dsp.h"
 #include "libavutil/mathematics.h"
-#include "avcodec.h"
+
 #define BITSTREAM_READER_LE
+#include "avcodec.h"
 #include "get_bits.h"
 #include "internal.h"
-
 #include "lsp.h"
 #include "acelp_vectors.h"
 #include "acelp_pitch_delay.h"
@@ -537,7 +537,7 @@ static int sipr_decode_frame(AVCodecContext *avctx, void *data,
         av_log(avctx, AV_LOG_ERROR,
                "Error processing packet: packet size (%d) too small\n",
                avpkt->size);
-        return -1;
+        return AVERROR_INVALIDDATA;
     }
 
     /* get output buffer */

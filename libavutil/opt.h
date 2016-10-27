@@ -58,7 +58,7 @@
  * The following example illustrates an AVOptions-enabled struct:
  * @code
  * typedef struct test_struct {
- *     AVClass *class;
+ *     const AVClass *class;
  *     int      int_opt;
  *     char    *str_opt;
  *     uint8_t *bin_opt;
@@ -96,7 +96,7 @@
  * @code
  * test_struct *alloc_test_struct(void)
  * {
- *     test_struct *ret = av_malloc(sizeof(*ret));
+ *     test_struct *ret = av_mallocz(sizeof(*ret));
  *     ret->class = &test_class;
  *     av_opt_set_defaults(ret);
  *     return ret;
@@ -281,7 +281,7 @@ typedef struct AVOption {
 #define AV_OPT_FLAG_VIDEO_PARAM     16
 #define AV_OPT_FLAG_SUBTITLE_PARAM  32
 /**
- * The option is inteded for exporting values to the caller.
+ * The option is intended for exporting values to the caller.
  */
 #define AV_OPT_FLAG_EXPORT          64
 /**
@@ -553,22 +553,28 @@ int av_opt_eval_q     (void *obj, const AVOption *o, const char *val, AVRational
  * @}
  */
 
-#define AV_OPT_SEARCH_CHILDREN   0x0001 /**< Search in possible children of the
-                                             given object first. */
+#define AV_OPT_SEARCH_CHILDREN   (1 << 0) /**< Search in possible children of the
+                                               given object first. */
 /**
  *  The obj passed to av_opt_find() is fake -- only a double pointer to AVClass
  *  instead of a required pointer to a struct containing AVClass. This is
  *  useful for searching for options without needing to allocate the corresponding
  *  object.
  */
-#define AV_OPT_SEARCH_FAKE_OBJ   0x0002
+#define AV_OPT_SEARCH_FAKE_OBJ   (1 << 1)
+
+/**
+ *  In av_opt_get, return NULL if the option has a pointer type and is set to NULL,
+ *  rather than returning an empty string.
+ */
+#define AV_OPT_ALLOW_NULL (1 << 2)
 
 /**
  *  Allows av_opt_query_ranges and av_opt_query_ranges_default to return more than
  *  one component for certain option types.
  *  @see AVOptionRanges for details.
  */
-#define AV_OPT_MULTI_COMPONENT_RANGE 0x1000
+#define AV_OPT_MULTI_COMPONENT_RANGE (1 << 12)
 
 /**
  * Look for an option in an object. Consider only options which
@@ -722,6 +728,10 @@ int av_opt_set_dict_val(void *obj, const char *name, const AVDictionary *val, in
  */
 /**
  * @note the returned string will be av_malloc()ed and must be av_free()ed by the caller
+ *
+ * @note if AV_OPT_ALLOW_NULL is set in search_flags in av_opt_get, and the option has
+ * AV_OPT_TYPE_STRING or AV_OPT_TYPE_BINARY and is set to NULL, *out_val will be set
+ * to NULL instead of an allocated empty string.
  */
 int av_opt_get         (void *obj, const char *name, int search_flags, uint8_t   **out_val);
 int av_opt_get_int     (void *obj, const char *name, int search_flags, int64_t    *out_val);

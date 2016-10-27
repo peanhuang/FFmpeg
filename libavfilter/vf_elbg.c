@@ -83,6 +83,7 @@ static av_cold int init(AVFilterContext *ctx)
 static int query_formats(AVFilterContext *ctx)
 {
     ELBGContext *elbg = ctx->priv;
+    int ret;
 
     static const enum AVPixelFormat pix_fmts[] = {
         AV_PIX_FMT_ARGB, AV_PIX_FMT_RGBA, AV_PIX_FMT_ABGR, AV_PIX_FMT_BGRA,
@@ -99,8 +100,9 @@ static int query_formats(AVFilterContext *ctx)
             AV_PIX_FMT_PAL8,
             AV_PIX_FMT_NONE
         };
-        ff_formats_ref(ff_make_format_list(pix_fmts), &ctx->inputs[0]->out_formats);
-        ff_formats_ref(ff_make_format_list(pal8_fmt), &ctx->outputs[0]->in_formats);
+        if ((ret = ff_formats_ref(ff_make_format_list(pix_fmts), &ctx->inputs[0]->out_formats)) < 0 ||
+            (ret = ff_formats_ref(ff_make_format_list(pal8_fmt), &ctx->outputs[0]->in_formats)) < 0)
+            return ret;
     }
     return 0;
 }
@@ -184,7 +186,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
         p0 = (uint8_t *)out->data[0];
 
         for (i = 0; i < elbg->codebook_length; i++) {
-            pal[i] = (elbg->codebook[i*3  ] << 16) |
+            pal[i] =  0xFFU                 << 24  |
+                     (elbg->codebook[i*3  ] << 16) |
                      (elbg->codebook[i*3+1] <<  8) |
                       elbg->codebook[i*3+2];
         }

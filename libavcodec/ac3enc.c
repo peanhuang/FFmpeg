@@ -1183,7 +1183,7 @@ static inline int asym_quant(int c, int e, int qbits)
 {
     int m;
 
-    c = (((c << e) >> (24 - qbits)) + 1) >> 1;
+    c = (((c * (1<<e)) >> (24 - qbits)) + 1) >> 1;
     m = (1 << (qbits-1));
     if (c >= m)
         c = m - 1;
@@ -2430,8 +2430,6 @@ av_cold int ff_ac3_encode_init(AVCodecContext *avctx)
     s->avctx = avctx;
 
     s->eac3 = avctx->codec_id == AV_CODEC_ID_EAC3;
-
-    ff_ac3_common_init();
 
     ret = validate_options(s);
     if (ret)

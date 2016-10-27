@@ -92,16 +92,15 @@ static int query_formats(AVFilterContext *ctx)
 {
     AVFilterFormats *formats = NULL;
     AVFilterChannelLayouts *layout = NULL;
+    int ret;
 
-    ff_add_format(&formats, AV_SAMPLE_FMT_DBL);
-    ff_set_common_formats(ctx, formats);
-    ff_add_channel_layout(&layout, AV_CH_LAYOUT_STEREO);
-    ff_set_common_channel_layouts(ctx, layout);
+    if ((ret = ff_add_format                 (&formats, AV_SAMPLE_FMT_DBL  )) < 0 ||
+        (ret = ff_set_common_formats         (ctx     , formats            )) < 0 ||
+        (ret = ff_add_channel_layout         (&layout , AV_CH_LAYOUT_STEREO)) < 0 ||
+        (ret = ff_set_common_channel_layouts (ctx     , layout             )) < 0)
+        return ret;
 
     formats = ff_all_samplerates();
-    if (!formats)
-        return AVERROR(ENOMEM);
-
     return ff_set_common_samplerates(ctx, formats);
 }
 
@@ -111,6 +110,10 @@ static int config_input(AVFilterLink *inlink)
     StereoToolsContext *s = ctx->priv;
 
     s->length = 2 * inlink->sample_rate * 0.05;
+    if (s->length <= 1 || s->length & 1) {
+        av_log(ctx, AV_LOG_ERROR, "sample rate is too small\n");
+        return AVERROR(EINVAL);
+    }
     s->buffer = av_calloc(s->length, sizeof(*s->buffer));
     if (!s->buffer)
         return AVERROR(ENOMEM);
@@ -140,21 +143,21 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     const double sc_level = s->sc_level;
     const double delay = s->delay;
     const int length = s->length;
-    const int mute_l = floor(s->mute_l + 0.5);
-    const int mute_r = floor(s->mute_r + 0.5);
-    const int phase_l = floor(s->phase_l + 0.5);
-    const int phase_r = floor(s->phase_r + 0.5);
+    const int mute_l = s->mute_l;
+    const int mute_r = s->mute_r;
+    const int phase_l = s->phase_l;
+    const int phase_r = s->phase_r;
     double *buffer = s->buffer;
-    AVFrame *out = NULL;
+    AVFrame *out;
     double *dst;
-    int nbuf = inlink->sample_rate * (FFABS(delay) / 1000.);
+    int nbuf = inlink->sample_rate * (fabs(delay) / 1000.);
     int n;
 
     nbuf -= nbuf % 2;
     if (av_frame_is_writable(in)) {
         out = in;
     } else {
-        AVFrame *out = ff_get_audio_buffer(inlink, in->nb_samples);
+        out = ff_get_audio_buffer(inlink, in->nb_samples);
         if (!out) {
             av_frame_free(&in);
             return AVERROR(ENOMEM);

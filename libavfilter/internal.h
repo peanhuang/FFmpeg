@@ -28,6 +28,7 @@
 #include "avfilter.h"
 #include "avfiltergraph.h"
 #include "formats.h"
+#include "framepool.h"
 #include "thread.h"
 #include "version.h"
 #include "video.h"
@@ -85,7 +86,7 @@ struct AVFilterPad {
      * Input pads only.
      *
      * @return >= 0 on success, a negative AVERROR on error. This function
-     * must ensure that samplesref is properly unreferenced on error if it
+     * must ensure that frame is properly unreferenced on error if it
      * hasn't been passed on to another filter.
      */
     int (*filter_frame)(AVFilterLink *link, AVFrame *frame);
@@ -152,7 +153,15 @@ struct AVFilterInternal {
     avfilter_execute_func *execute;
 };
 
-/** Tell is a format is contained in the provided list terminated by -1. */
+/**
+ * Tell if an integer is contained in the provided -1-terminated list of integers.
+ * This is useful for determining (for instance) if an AVPixelFormat is in an
+ * array of supported formats.
+ *
+ * @param fmt provided format
+ * @param fmts -1-terminated list of formats
+ * @return 1 if present, 0 if absent
+ */
 int ff_fmt_is_in(int fmt, const int *fmts);
 
 /* Functions to parse audio format arguments */
@@ -165,6 +174,7 @@ int ff_fmt_is_in(int fmt, const int *fmts);
  * @param log_ctx log context
  * @return >= 0 in case of success, a negative AVERROR code on error
  */
+av_warn_unused_result
 int ff_parse_pixel_format(enum AVPixelFormat *ret, const char *arg, void *log_ctx);
 
 /**
@@ -175,6 +185,7 @@ int ff_parse_pixel_format(enum AVPixelFormat *ret, const char *arg, void *log_ct
  * @param log_ctx log context
  * @return >= 0 in case of success, a negative AVERROR code on error
  */
+av_warn_unused_result
 int ff_parse_sample_rate(int *ret, const char *arg, void *log_ctx);
 
 /**
@@ -185,6 +196,7 @@ int ff_parse_sample_rate(int *ret, const char *arg, void *log_ctx);
  * @param log_ctx log context
  * @return >= 0 in case of success, a negative AVERROR code on error
  */
+av_warn_unused_result
 int ff_parse_time_base(AVRational *ret, const char *arg, void *log_ctx);
 
 /**
@@ -195,6 +207,7 @@ int ff_parse_time_base(AVRational *ret, const char *arg, void *log_ctx);
  * @param log_ctx log context
  * @return >= 0 in case of success, a negative AVERROR code on error
  */
+av_warn_unused_result
 int ff_parse_sample_format(int *ret, const char *arg, void *log_ctx);
 
 /**
@@ -207,10 +220,26 @@ int ff_parse_sample_format(int *ret, const char *arg, void *log_ctx);
  * @param log_ctx log context
  * @return >= 0 in case of success, a negative AVERROR code on error
  */
+av_warn_unused_result
 int ff_parse_channel_layout(int64_t *ret, int *nret, const char *arg,
                             void *log_ctx);
 
 void ff_update_link_current_pts(AVFilterLink *link, int64_t pts);
+
+/**
+ * Set the status field of a link from the source filter.
+ * The pts should reflect the timestamp of the status change,
+ * in link time base and relative to the frames timeline.
+ * In particular, for AVERROR_EOF, it should reflect the
+ * end time of the last frame.
+ */
+void ff_avfilter_link_set_in_status(AVFilterLink *link, int status, int64_t pts);
+
+/**
+ * Set the status field of a link from the destination filter.
+ * The pts should probably be left unset (AV_NOPTS_VALUE).
+ */
+void ff_avfilter_link_set_out_status(AVFilterLink *link, int status, int64_t pts);
 
 void ff_command_queue_pop(AVFilterContext *filter);
 
@@ -305,6 +334,8 @@ int ff_poll_frame(AVFilterLink *link);
  */
 int ff_request_frame(AVFilterLink *link);
 
+int ff_request_frame_to_filter(AVFilterLink *link);
+
 #define AVFILTER_DEFINE_CLASS(fname)            \
     static const AVClass fname##_class = {      \
         .class_name = #fname,                   \
@@ -351,6 +382,11 @@ AVFilterContext *ff_filter_alloc(const AVFilter *filter, const char *inst_name);
 void ff_filter_graph_remove_filter(AVFilterGraph *graph, AVFilterContext *filter);
 
 /**
+ * Run one round of processing on a filter graph.
+ */
+int ff_filter_graph_run_once(AVFilterGraph *graph);
+
+/**
  * Normalize the qscale factor
  * FIXME the H264 qscale is a log based scale, mpeg1/2 is not, the code below
  *       cannot be optimal
@@ -365,5 +401,11 @@ static inline int ff_norm_qscale(int qscale, int type)
     }
     return qscale;
 }
+
+/**
+ * Get number of threads for current filter instance.
+ * This number is always same or less than graph->nb_threads.
+ */
+int ff_filter_get_nb_threads(AVFilterContext *ctx);
 
 #endif /* AVFILTER_INTERNAL_H */
